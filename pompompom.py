@@ -52,7 +52,6 @@ class PomodoroModel:
         if state == "Work":
             self.remaining_time = self.work_duration
             if self.task_list:
-                print(self.current_task_index, len(self.task_list))
                 if self.current_task_index == -1:
                     self.current_task_index = (self.current_task_index + 1)
 
@@ -204,7 +203,6 @@ class PomodoroView:
             return
         select_window: tk.Toplevel = tk.Toplevel(self.root)
         select_window.title("Select Task")
-        select_window.attributes("-topmost", True)
         
         listbox: tk.Listbox = tk.Listbox(select_window, width=50, height=15)
         listbox.pack(padx=10, pady=10)
@@ -222,7 +220,6 @@ class PomodoroView:
     def open_task_list(self) -> None:
         self.task_window = tk.Toplevel(self.root)
         self.task_window.title("Task List")
-        self.task_window.attributes("-topmost", True)
         self.spreadsheet = self.create_spreadsheet(self.task_window, 20, 2)
         self.populate_spreadsheet()
         
@@ -290,7 +287,6 @@ class PomodoroView:
                             raise ValueError("CSV format incorrect. Each row must have a task name and a number of pomodoros.")
                         tasks.append([row[0], int(row[1])])
                 self.model.task_list = tasks
-                print(self.model.task_list)
                 self.populate_spreadsheet()
                 self.model.select_task(0) if tasks else self.model.reset_pomodoro()
                 self.update_display()

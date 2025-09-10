@@ -1,6 +1,6 @@
 # PomPomPom - Pomodoro Timer
 
-PomPomPom is a simple desktop Pomodoro timer built with Python and Tkinter without additional dependencies. It helps you manage tasks using the Pomodoro technique, allowing you to track work sessions and breaks, and organize your tasks with a spreadsheet-like interface.
+PomPomPom is a simple desktop Pomodoro timer built with Python and Tkinter without additional dependencies. It helps you manage tasks using the Pomodoro technique, allowing you to track work sessions and breaks, and organize your tasks with a spreadsheet-like interface. Mostly vibe-coded with Gemini/CoPilot.
 
 ## Features
 
@@ -33,7 +33,7 @@ Clone this repository or copy the files to your local machine.
     - **Next Pomodoro**: Move to the next session
     - **Pause/Resume**: Pause or resume the timer
     - **Select Task**: Choose a task to work on
-    - **Task List**: Open the task spreadsheet to add/edit tasks
+    - **Task List**: Open the task spreadsheet to add/edit tasks (Do this before clicking 'Select Task'. Save the task list to update the GUI)
     - **Settings**: Adjust work/break durations and save/load settings
     - **Quit**: Exit the application
 
@@ -62,5 +62,3 @@ Program,2
 MIT License
 
 ---
-
-Enjoy productive work sessions!
