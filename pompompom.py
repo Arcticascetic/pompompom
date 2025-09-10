@@ -18,7 +18,7 @@ class PomodoroModel:
         self.is_running: bool = False
         self.remaining_time: int = self.work_duration
         self.current_task: str = "No Task Selected"
-        self.task_list: List[List[str]] = []
+        self.task_list: List[List[str | int]] = []
         self.current_task_index: int = -1 # Start at -1 to handle the first task correctly
 
     def get_next_state(self) -> Tuple[str, int, str]:
@@ -30,10 +30,20 @@ class PomodoroModel:
         if state == "Work":
             self.remaining_time = self.work_duration
             if self.task_list:
-		# Only advance the task index if the cycle is starting a new work session
-                if self.current_state_index == 0 or self.current_task_index == -1:
+                print(self.current_task_index, len(self.task_list))
+                if self.current_task_index == -1:
+                    self.current_task_index = (self.current_task_index + 1)
+
+                elif self.task_list[self.current_task_index][1] != 0: 
+                    self.task_list[self.current_task_index][1] -= 1
+
+                if self.task_list[self.current_task_index][1] == 0:
                     self.current_task_index = (self.current_task_index + 1) % len(self.task_list)
-                self.current_task = self.task_list[self.current_task_index][0]
+                
+                if self.task_list[self.current_task_index][1] != 0:
+                    self.current_task = self.task_list[self.current_task_index][0]
+                else :
+                    self.current_task = "All Tasks Completed"
             else:
                 self.current_task = "No Task Selected"
         elif state == "Short Break":
@@ -226,7 +236,8 @@ class PomodoroView:
                 self.spreadsheet[i][1].insert(0, pomodoros)
 
     def save_to_csv(self) -> None:
-        data: List[List[str]] = [[entry.get() for entry in row] for row in self.spreadsheet if any(e.get().strip() for e in row)]
+
+        data: List[List[str | int]] = [tuple([entry.get() for entry in row]) for row in self.spreadsheet if any(e.get().strip() for e in row)]
         self.model.task_list = data
         if not data:
             messagebox.showwarning("Empty List", "Task list is empty. Nothing to save.")
@@ -248,11 +259,16 @@ class PomodoroView:
         file_path: str = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if file_path:
             try:
+                tasks: List[List[str | int]] = []
                 with open(file_path, 'r', newline='') as f:
                     reader = csv.reader(f)
                     next(reader)
-                    tasks: List[List[str]] = [row for row in reader if row]
+                    for row in reader:
+                        if len(row) != 2 or not row[1].isdigit():
+                            raise ValueError("CSV format incorrect. Each row must have a task name and a number of pomodoros.")
+                        tasks.append([row[0], int(row[1])])
                 self.model.task_list = tasks
+                print(self.model.task_list)
                 self.populate_spreadsheet()
                 self.model.select_task(0) if tasks else self.model.reset_pomodoro()
                 self.update_display()
