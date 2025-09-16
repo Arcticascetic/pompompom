@@ -63,7 +63,7 @@ class PomodoroModel:
                 
                 if self.task_list[self.current_task_index][1] != 0:
                     self.current_task = self.task_list[self.current_task_index][0]
-                else :
+                else:
                     self.current_task = "All Tasks Completed"
             else:
                 self.current_task = "No Task Selected"
@@ -256,9 +256,23 @@ class PomodoroView:
 
     def save_to_csv(self) -> None:
 
-        data: List[List[str | int]] = [tuple([entry.get() for entry in row]) for row in self.spreadsheet if any(e.get().strip() for e in row)]
-        self.model.task_list = data
-        if not data:
+        tasks: List[List[str | int]] = []
+        for row in self.spreadsheet:
+            if len(row) != 2:
+                raise ValueError("CSV format incorrect. Each row must have a task name and a number of pomodoros.")
+            curr_task : List[List[str | int]] = []
+            isValid : bool = True
+            for entry in row:
+                cellVal = entry.get()
+                if len(cellVal) == 0:
+                    isValid = False
+                curr_task.append(cellVal)
+
+            if isValid:
+                tasks.append([curr_task[0], int(curr_task[1])])
+
+        self.model.task_list = tasks
+        if not tasks:
             messagebox.showwarning("Empty List", "Task list is empty. Nothing to save.")
             return
         file_path: str = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
@@ -267,9 +281,9 @@ class PomodoroView:
                 with open(file_path, 'w', newline='') as f:
                     writer = csv.writer(f)
                     writer.writerow(["Task Name", "Pomodoros"])
-                    writer.writerows(data)
+                    writer.writerows(tasks)
                 messagebox.showinfo("Success", "Task list saved.")
-                if self.model.current_task_index >= len(data): self.model.select_task(0)
+                if self.model.current_task_index >= len(tasks): self.model.select_task(0)
                 self.update_display()
             except Exception as e:
                 messagebox.showerror("Error", f"Could not save file: {e}")
