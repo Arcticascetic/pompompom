@@ -113,15 +113,24 @@ class PomodoroView:
         self.root.title("Pomodoro")
         self.root.geometry("420x150") # Adjusted window size for new layout
         self.root.attributes("-topmost", True)
-        self.root.overrideredirect(False)
+        self.root.overrideredirect(True)
         # ---  Allow window to be resized ---
         self.root.resizable(True, True)
         self.root.minsize(280, 100) # Set a minimum practical size
 
         self._start_x: int = 0
         self._start_y: int = 0
+        self._orig_x: int = 0
+        self._orig_y: int = 0
+        self._orig_width: int = 0
+        self._orig_height: int = 0
+        self._resizing: bool = False
+        self._resize_border: int = 8  # pixels
+
         self.root.bind('<ButtonPress-1>', self._on_press)
         self.root.bind('<B1-Motion>', self._on_drag)
+        self.root.bind('<ButtonRelease-1>', self._on_release)
+        self.root.bind('<Motion>', self._on_motion)
         self.root.bind('<Configure>', self._on_resize)
 
         # --- Define base sizes for scaling ---
@@ -167,17 +176,49 @@ class PomodoroView:
         # Trigger it once to set initial wraplength
         self.root.update_idletasks()
 
-
     def _on_press(self, event: tk.Event) -> None:
-        self._start_x = event.x
-        self._start_y = event.y
+        x, y = event.x, event.y
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        # Check if near bottom-right corner for resize
+        if width - x < self._resize_border and height - y < self._resize_border:
+            self._resizing = True
+            self._orig_x = self.root.winfo_x()
+            self._orig_y = self.root.winfo_y()
+            self._orig_width = width
+            self._orig_height = height
+            self._start_x = event.x_root
+            self._start_y = event.y_root
+        else:
+            self._resizing = False
+            self._start_x = event.x
+            self._start_y = event.y
 
     def _on_drag(self, event: tk.Event) -> None:
-        x : int = self.root.winfo_x() + (event.x - self._start_x)
-        y : int = self.root.winfo_y() + (event.y - self._start_y)
-        self.root.geometry(f"+{x}+{y}")
+        if self._resizing:
+            dx = event.x_root - self._start_x
+            dy = event.y_root - self._start_y
+            new_width = max(self._orig_width + dx, self.root.minsize()[0])
+            new_height = max(self._orig_height + dy, self.root.minsize()[1])
+            self.root.geometry(f"{int(new_width)}x{int(new_height)}")
+        else:
+            x = self.root.winfo_x() + (event.x - self._start_x)
+            y = self.root.winfo_y() + (event.y - self._start_y)
+            self.root.geometry(f"+{x}+{y}")
 
-    # --- NEW: Method to handle window resizing and scale fonts ---
+    def _on_release(self, event: tk.Event) -> None:
+        self._resizing = False
+
+    def _on_motion(self, event: tk.Event) -> None:
+        x, y = event.x, event.y
+        width = self.root.winfo_width()
+        height = self.root.winfo_height()
+        if width - x < self._resize_border and height - y < self._resize_border:
+            self.root.config(cursor="bottom_right_corner")
+        else:
+            self.root.config(cursor="")
+
+    # --- Method to handle window resizing and scale fonts ---
     def _on_resize(self, event):
         height : int = self.root.winfo_height()
         width : int = self.root.winfo_width()
@@ -185,7 +226,6 @@ class PomodoroView:
         if width == self.width:
             return  # No change in size
 
-        print (height, width)
         # Calculate scale factor based on height change
         scale_factor : float = height / self.base_height
 
@@ -202,7 +242,7 @@ class PomodoroView:
         # Dynamically update wraplength for the task label
         new_wraplength : int = int(width * 0.45)
         self.task_label.config(wraplength=new_wraplength)
-    
+
     def create_right_click_menu(self) -> None:
         self.menu = tk.Menu(self.root, tearoff=0)
         self.menu.add_command(label="Next Pomodoro", command=self.next_pomodoro)
