@@ -22,6 +22,7 @@
 
 import tkinter as tk
 from tkinter import ttk  # Import the themed tkinter module
+from tkinter import font as tkfont  # Import the font module
 from tkinter import filedialog, messagebox
 import csv
 import json
@@ -112,31 +113,46 @@ class PomodoroView:
         self.root.title("Pomodoro")
         self.root.geometry("420x150") # Adjusted window size for new layout
         self.root.attributes("-topmost", True)
-        self.root.overrideredirect(True)
+        self.root.overrideredirect(False)
+        # ---  Allow window to be resized ---
+        self.root.resizable(True, True)
+        self.root.minsize(280, 100) # Set a minimum practical size
 
         self._start_x: int = 0
         self._start_y: int = 0
         self.root.bind('<ButtonPress-1>', self._on_press)
         self.root.bind('<B1-Motion>', self._on_drag)
+        self.root.bind('<Configure>', self._on_resize)
 
+        # --- Define base sizes for scaling ---
+        self.base_height : int = 150
+        self.base_time_font_size : int = 48
+        self.base_state_font_size : int = 14
+        self.base_task_font_size : int = 16
+        self.height : int = 0
+        self.width : int = 0
 
+        # --- Create dynamic font objects ---
+        self.time_font = tkfont.Font(family='Helvetica', size=self.base_time_font_size)
+        self.state_font = tkfont.Font(family='Helvetica', size=self.base_state_font_size)
+        self.task_font = tkfont.Font(family='Helvetica', size=self.base_task_font_size)
 
         self.root.config()
 
         display_frame: tk.Frame = tk.Frame(root)
         display_frame.pack(pady=20, padx=20, fill="both", expand=True)
 
-        self.task_label: tk.Label = tk.Label(display_frame, text="", font=("Helvetica", 16), justify=tk.LEFT, wraplength=180)
-        self.task_label.pack(side=tk.LEFT, fill="y", padx=(0, 10))
+        self.task_label: tk.Label = tk.Label(display_frame, text="", font=self.task_font, justify=tk.LEFT)
+        self.task_label.pack(side=tk.LEFT, fill="y", padx=(0, 10), expand=False)
 
         timer_state_frame: tk.Frame = tk.Frame(display_frame)
-        timer_state_frame.pack(side=tk.RIGHT, fill="y")
+        timer_state_frame.pack(side=tk.RIGHT, fill="y", expand=False)
 
-        self.time_label: tk.Label = tk.Label(timer_state_frame, text="", font=("Helvetica", 48))
-        self.time_label.pack()
+        self.time_label: tk.Label = tk.Label(timer_state_frame, text="", font=self.time_font)
+        self.time_label.pack(expand=True)
 
-        self.state_label: tk.Label = tk.Label(timer_state_frame, text="", font=("Helvetica", 14))
-        self.state_label.pack()
+        self.state_label: tk.Label = tk.Label(timer_state_frame, text="", font=self.state_font)
+        self.state_label.pack(expand=True)
 
         self.menu: Optional[tk.Menu] = None
         self.task_window: Optional[tk.Toplevel] = None
@@ -148,14 +164,44 @@ class PomodoroView:
         self.update_display()
         self.update_timer()
 
+        # Trigger it once to set initial wraplength
+        self.root.update_idletasks()
+
+
     def _on_press(self, event: tk.Event) -> None:
         self._start_x = event.x
         self._start_y = event.y
 
     def _on_drag(self, event: tk.Event) -> None:
-        x = self.root.winfo_x() + (event.x - self._start_x)
-        y = self.root.winfo_y() + (event.y - self._start_y)
+        x : int = self.root.winfo_x() + (event.x - self._start_x)
+        y : int = self.root.winfo_y() + (event.y - self._start_y)
         self.root.geometry(f"+{x}+{y}")
+
+    # --- NEW: Method to handle window resizing and scale fonts ---
+    def _on_resize(self, event):
+        height : int = self.root.winfo_height()
+        width : int = self.root.winfo_width()
+
+        if width == self.width:
+            return  # No change in size
+
+        print (height, width)
+        # Calculate scale factor based on height change
+        scale_factor : float = height / self.base_height
+
+        # Calculate new font sizes, with a minimum size to maintain readability
+        new_time_size : int = max(8, int(self.base_time_font_size * scale_factor))
+        new_state_size : int = max(6, int(self.base_state_font_size * scale_factor))
+        new_task_size : int = max(7, int(self.base_task_font_size * scale_factor))
+
+        # Configure the font objects with the new sizes
+        self.time_font.config(size=new_time_size)
+        self.state_font.config(size=new_state_size)
+        self.task_font.config(size=new_task_size)
+
+        # Dynamically update wraplength for the task label
+        new_wraplength : int = int(width * 0.45)
+        self.task_label.config(wraplength=new_wraplength)
     
     def create_right_click_menu(self) -> None:
         self.menu = tk.Menu(self.root, tearoff=0)
@@ -263,7 +309,7 @@ class PomodoroView:
             curr_task : List[List[str | int]] = []
             isValid : bool = True
             for entry in row:
-                cellVal = entry.get()
+                cellVal : str = entry.get()
                 if len(cellVal) == 0:
                     isValid = False
                 curr_task.append(cellVal)
