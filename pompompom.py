@@ -135,7 +135,7 @@ class PomodoroView:
 
         # --- Define base sizes for scaling ---
         self.base_height : int = 150
-        self.base_time_font_size : int = 48
+        self.base_time_font_size : int = 36
         self.base_state_font_size : int = 14
         self.base_task_font_size : int = 16
         self.height : int = 0
@@ -201,10 +201,12 @@ class PomodoroView:
             new_width = max(self._orig_width + dx, self.root.minsize()[0])
             new_height = max(self._orig_height + dy, self.root.minsize()[1])
             self.root.geometry(f"{int(new_width)}x{int(new_height)}")
+            print(f"Resizing: {new_width}x{new_height}")
         else:
             x = self.root.winfo_x() + (event.x - self._start_x)
             y = self.root.winfo_y() + (event.y - self._start_y)
             self.root.geometry(f"+{x}+{y}")
+            print(f"Moving to: {x},{y}")    
 
     def _on_release(self, event: tk.Event) -> None:
         self._resizing = False
