@@ -26,6 +26,7 @@ from tkinter import font as tkfont  # Import the font module
 from tkinter import filedialog, messagebox
 import csv
 import json
+import os
 from typing import List, Tuple, Any, Optional
 
 class PomodoroModel:
@@ -449,7 +450,39 @@ class PomodoroView:
 if __name__ == "__main__":
     root: tk.Tk = tk.Tk()
     root.withdraw() 
+    
+    # Create model and view
     pomodoro_model: PomodoroModel = PomodoroModel()
     pomodoro_view: PomodoroView = PomodoroView(root, pomodoro_model)
+    
+    # Try to load configuration
+    if os.path.exists("config.json"):
+        try:
+            with open("config.json", 'r') as f:
+                data : dict = json.load(f)
+                pomodoro_model.work_duration = int(data['work']) * 60
+                pomodoro_model.short_break_duration = int(data['short']) * 60
+                pomodoro_model.long_break_duration = int(data['long']) * 60
+                pomodoro_view.reset_pomodoro()
+                pomodoro_view.update_display()
+        except Exception as e:
+            print(f"Error loading config.json: {e}")
+    
+    # Try to load tasks
+    if os.path.exists("tasks.csv"):
+        try:
+            tasks: List[List[str | int]] = []
+            with open("tasks.csv", 'r', newline='') as f:
+                reader = csv.reader(f)
+                next(reader)  # Skip header
+                for row in reader:
+                    if len(row) == 2 and row[1].isdigit():
+                        tasks.append([row[0], int(row[1])])
+            pomodoro_model.task_list = tasks
+            if tasks:
+                pomodoro_model.select_task(0)
+        except Exception as e:
+            print(f"Error loading tasks.csv: {e}")
+    
     root.deiconify() 
     root.mainloop()
