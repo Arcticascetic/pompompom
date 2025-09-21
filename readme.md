@@ -25,9 +25,14 @@ Clone this repository or copy the files to your local machine.
 
 1. Run the application:
 
-    ```sh
-    python pompompom.py
-    ```
+    - ** On Windows **
+        ```sh
+        pythonw.exe pompompom.py
+        ```
+    - ** On Linux/Mac**
+        ```sh
+        python pompompom.py
+        ```
 
 2. Right-click on the timer window to access the menu:
     - **Next Pomodoro**: Move to the next session
@@ -37,9 +42,9 @@ Clone this repository or copy the files to your local machine.
     - **Settings**: Adjust work/break durations and save/load settings
     - **Quit**: Exit the application
 
-3. Manage your tasks in the spreadsheet window. Save or load your task list using CSV files.
+3. Manage your tasks in the spreadsheet window. Save or load your task list using CSV files. If a file named "tasks.csv" is located in the same folder, that file is loaded at start. 
 
-4. Adjust timer durations in the settings window. Save or load your configuration using JSON files.
+4. Adjust timer durations in the settings window. Save or load your configuration using JSON files. If a file name "config.json" is located in the same folder, that file is used to overwrite the default configuration. 
 
 ## File Structure
 
