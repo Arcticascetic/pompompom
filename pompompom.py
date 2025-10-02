@@ -77,6 +77,14 @@ class PomodoroModel:
             self.current_task = "Long Break"
         return state, self.remaining_time, self.current_task
 
+    def start(self) -> None:
+        """
+        Starts the Pomodoro timer.
+        """
+        if not self.is_running:
+            self.is_running = True
+
+
     def toggle_pause(self) -> None:
         """
         Toggles the running state of the timer.
@@ -117,7 +125,7 @@ class PomodoroView:
         self.root.overrideredirect(True)
         # ---  Allow window to be resized ---
         self.root.resizable(True, True)
-        self.root.minsize(280, 100) # Set a minimum practical size
+        self.root.minsize(120, 80) # Set a minimum practical size
 
         self._start_x: int = 0
         self._start_y: int = 0
@@ -135,7 +143,7 @@ class PomodoroView:
         self.root.bind('<Configure>', self._on_resize)
 
         # --- Define base sizes for scaling ---
-        self.base_height : int = 150
+        self.base_height : int = 180
         self.base_time_font_size : int = 36
         self.base_state_font_size : int = 14
         self.base_task_font_size : int = 16
@@ -150,7 +158,7 @@ class PomodoroView:
         self.root.config()
 
         display_frame: tk.Frame = tk.Frame(root)
-        display_frame.pack(pady=20, padx=20, fill="both", expand=True)
+        display_frame.pack(pady=10, padx=20, fill="both", expand=True)
 
         self.task_label: tk.Label = tk.Label(display_frame, text="", font=self.task_font, justify=tk.LEFT)
         self.task_label.pack(side=tk.LEFT, fill="y", padx=(0, 10), expand=False)
@@ -168,11 +176,15 @@ class PomodoroView:
         self.task_window: Optional[tk.Toplevel] = None
         self.spreadsheet: Optional[List[List[tk.Entry]]] = None
 
+        self.config_filename: str = "config.json"
+        self.tasks_filename: str = "tasks.csv"  
+
         self.create_right_click_menu()
 
         self.model.reset_pomodoro()
         self.update_display()
         self.update_timer()
+        self.model.start()
 
         # Trigger it once to set initial wraplength
         self.root.update_idletasks()
@@ -202,12 +214,12 @@ class PomodoroView:
             new_width = max(self._orig_width + dx, self.root.minsize()[0])
             new_height = max(self._orig_height + dy, self.root.minsize()[1])
             self.root.geometry(f"{int(new_width)}x{int(new_height)}")
-            print(f"Resizing: {new_width}x{new_height}")
+            # print(f"Resizing: {new_width}x{new_height}")
         else:
             x = self.root.winfo_x() + (event.x - self._start_x)
             y = self.root.winfo_y() + (event.y - self._start_y)
             self.root.geometry(f"+{x}+{y}")
-            print(f"Moving to: {x},{y}")    
+            # print(f"Moving to: {x},{y}")
 
     def _on_release(self, event: tk.Event) -> None:
         self._resizing = False
@@ -256,8 +268,35 @@ class PomodoroView:
         self.menu.add_separator()
         self.menu.add_command(label="Settings", command=self.open_settings_window)
         self.menu.add_separator()
-        self.menu.add_command(label="Quit", command=self.root.destroy)
+        # call internal handler so we can run cleanup before destroying
+        self.menu.add_command(label="Quit", command=self._on_quit)
         self.root.bind("<Button-3>", self.show_menu)
+
+    def _on_quit(self) -> None:
+        """
+        Internal quit handler. If an external quit callback is set (via
+        set_on_quit_callback) call it first so it can save state, then
+        ensure the window is destroyed.
+        """
+        cb = getattr(self, "_on_quit_callback", None)
+        if callable(cb):
+            try:
+                cb()
+            except Exception as e:
+                # don't crash on save error; print for debugging
+                print(f"Error in quit callback: {e}")
+        # Ensure window is closed
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    def set_on_quit_callback(self, callback: Optional[callable]) -> None:
+        """
+        Register a callback to be executed when the application quits.
+        The callback should take no arguments.
+        """
+        self._on_quit_callback = callback
 
     def show_menu(self, event: tk.Event) -> None:
         try:
@@ -371,28 +410,34 @@ class PomodoroView:
                     writer = csv.writer(f)
                     writer.writerow(["Task Name", "Pomodoros"])
                     writer.writerows(tasks)
-                messagebox.showinfo("Success", "Task list saved.")
+                self.tasks_filename = file_path
+
                 if self.model.current_task_index >= len(tasks): self.model.select_task(0)
                 self.update_display()
+                self.model.start()
             except Exception as e:
                 messagebox.showerror("Error", f"Could not save file: {e}")
+
+    def load_from_existing_csv(self, file_path: str) -> None:
+        tasks: List[List[str | int]] = []
+        with open(file_path, 'r', newline='') as f:
+            reader = csv.reader(f)
+            next(reader)
+            for row in reader:
+                if len(row) != 2 or not row[1].isdigit():
+                    raise ValueError("CSV format incorrect. Each row must have a task name and a number of pomodoros.")
+                tasks.append([row[0], int(row[1])])
+        self.model.task_list = tasks
+        self.populate_spreadsheet()
+        self.model.select_task(0) if tasks else self.model.reset_pomodoro()
+        self.update_display()
+        self.model.start()
 
     def load_from_csv(self) -> None:
         file_path: str = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
         if file_path:
             try:
-                tasks: List[List[str | int]] = []
-                with open(file_path, 'r', newline='') as f:
-                    reader = csv.reader(f)
-                    next(reader)
-                    for row in reader:
-                        if len(row) != 2 or not row[1].isdigit():
-                            raise ValueError("CSV format incorrect. Each row must have a task name and a number of pomodoros.")
-                        tasks.append([row[0], int(row[1])])
-                self.model.task_list = tasks
-                self.populate_spreadsheet()
-                self.model.select_task(0) if tasks else self.model.reset_pomodoro()
-                self.update_display()
+                self.load_from_existing_csv(file_path)
             except Exception as e:
                 messagebox.showerror("Error", f"Could not load file: {e}")
 
@@ -432,7 +477,7 @@ class PomodoroView:
             path: str = filedialog.asksaveasfilename(defaultextension=".json", filetypes=[("JSON files", "*.json")])
             if path:
                 with open(path, 'w') as f: json.dump(data, f, indent=4)
-                messagebox.showinfo("Success", "Configuration saved.")
+                self.config_filename = path
 
         def load_config() -> None:
             path: str = filedialog.askopenfilename(filetypes=[("JSON files", "*.json")])
@@ -454,33 +499,64 @@ if __name__ == "__main__":
     # Create model and view
     pomodoro_model: PomodoroModel = PomodoroModel()
     pomodoro_view: PomodoroView = PomodoroView(root, pomodoro_model)
+
+    def on_close() -> None:
+        """Save config.json and tasks.csv in the current folder, then exit."""
+        # Save config.json (store durations in minutes as strings to match GUI format)
+        try:
+            config_data = {
+                'work': str(pomodoro_model.work_duration // 60),
+                'short': str(pomodoro_model.short_break_duration // 60),
+                'long': str(pomodoro_model.long_break_duration // 60),
+            }
+            with open(pomodoro_view.config_filename, "w") as f:
+                json.dump(config_data, f, indent=4)
+        except Exception as e:
+            print(f"Error saving config.json: {e}")
+
+        # Save tasks.csv (only non-empty task list entries)
+        try:
+            tasks = pomodoro_model.task_list
+            with open(pomodoro_view.tasks_filename, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["Task Name", "Pomodoros"])
+                for row in tasks:
+                    # Expect rows like [name, count]
+                    if not row:
+                        continue
+                    name = str(row[0])
+                    count = row[1] if len(row) > 1 else ""
+                    writer.writerow([name, count])
+        except Exception as e:
+            print(f"Error saving tasks.csv: {e}")
+
+        # Finalize exit
+        try:
+            root.destroy()
+        except Exception:
+            pass
+
+    # Register quit callback on the view and the window manager close protocol
+    pomodoro_view.set_on_quit_callback(on_close)
+    root.protocol("WM_DELETE_WINDOW", on_close)
     
     # Try to load configuration
-    if os.path.exists("config.json"):
+    if os.path.exists(pomodoro_view.config_filename):
         try:
-            with open("config.json", 'r') as f:
+            with open(pomodoro_view.config_filename, 'r') as f:
                 data : dict = json.load(f)
                 pomodoro_model.work_duration = int(data['work']) * 60
                 pomodoro_model.short_break_duration = int(data['short']) * 60
                 pomodoro_model.long_break_duration = int(data['long']) * 60
-                pomodoro_view.reset_pomodoro()
+                pomodoro_model.reset_pomodoro()
                 pomodoro_view.update_display()
         except Exception as e:
             print(f"Error loading config.json: {e}")
     
     # Try to load tasks
-    if os.path.exists("tasks.csv"):
+    if os.path.exists(pomodoro_view.tasks_filename):
         try:
-            tasks: List[List[str | int]] = []
-            with open("tasks.csv", 'r', newline='') as f:
-                reader = csv.reader(f)
-                next(reader)  # Skip header
-                for row in reader:
-                    if len(row) == 2 and row[1].isdigit():
-                        tasks.append([row[0], int(row[1])])
-            pomodoro_model.task_list = tasks
-            if tasks:
-                pomodoro_model.select_task(0)
+            pomodoro_view.load_from_existing_csv(pomodoro_view.tasks_filename)
         except Exception as e:
             print(f"Error loading tasks.csv: {e}")
     
