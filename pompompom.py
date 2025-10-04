@@ -27,7 +27,7 @@ from tkinter import filedialog, messagebox
 import csv
 import json
 import os
-from typing import List, Tuple, Any, Optional
+from typing import List, Tuple, Any, Optional, Callable
 
 class PomodoroModel:
     """
@@ -155,7 +155,12 @@ class PomodoroView:
         self.state_font = tkfont.Font(family='Helvetica', size=self.base_state_font_size)
         self.task_font = tkfont.Font(family='Helvetica', size=self.base_task_font_size)
 
-        self.root.config()
+        # flash overlay handle
+        self._flash_overlay: Optional[tk.Frame] = None
+
+        # store filenames
+        self.config_filename: str = "config.json"
+        self.tasks_filename: str = "tasks.csv"
 
         display_frame: tk.Frame = tk.Frame(root)
         display_frame.pack(pady=10, padx=20, fill="both", expand=True)
@@ -175,9 +180,6 @@ class PomodoroView:
         self.menu: Optional[tk.Menu] = None
         self.task_window: Optional[tk.Toplevel] = None
         self.spreadsheet: Optional[List[List[tk.Entry]]] = None
-
-        self.config_filename: str = "config.json"
-        self.tasks_filename: str = "tasks.csv"  
 
         self.create_right_click_menu()
 
@@ -214,12 +216,10 @@ class PomodoroView:
             new_width = max(self._orig_width + dx, self.root.minsize()[0])
             new_height = max(self._orig_height + dy, self.root.minsize()[1])
             self.root.geometry(f"{int(new_width)}x{int(new_height)}")
-            # print(f"Resizing: {new_width}x{new_height}")
         else:
             x = self.root.winfo_x() + (event.x - self._start_x)
             y = self.root.winfo_y() + (event.y - self._start_y)
             self.root.geometry(f"+{x}+{y}")
-            # print(f"Moving to: {x},{y}")
 
     def _on_release(self, event: tk.Event) -> None:
         self._resizing = False
@@ -229,12 +229,16 @@ class PomodoroView:
         width = self.root.winfo_width()
         height = self.root.winfo_height()
         if width - x < self._resize_border and height - y < self._resize_border:
-            self.root.config(cursor="bottom_right_corner")
+            # use a common, widely-supported cursor name for bottom-right corner
+            try:
+                self.root.config(cursor="bottom_right_corner")
+            except tk.TclError:
+                self.root.config(cursor="arrow")
         else:
             self.root.config(cursor="")
 
     # --- Method to handle window resizing and scale fonts ---
-    def _on_resize(self, event):
+    def _on_resize(self, event: tk.Event) -> None:
         height : int = self.root.winfo_height()
         width : int = self.root.winfo_width()
 
@@ -257,6 +261,10 @@ class PomodoroView:
         # Dynamically update wraplength for the task label
         new_wraplength : int = int(width * 0.45)
         self.task_label.config(wraplength=new_wraplength)
+
+        # store last known width to avoid repeated work
+        self.width = width
+        self.height = height
 
     def create_right_click_menu(self) -> None:
         self.menu = tk.Menu(self.root, tearoff=0)
@@ -291,7 +299,7 @@ class PomodoroView:
         except Exception:
             pass
 
-    def set_on_quit_callback(self, callback: Optional[callable]) -> None:
+    def set_on_quit_callback(self, callback: Optional[Callable[[], None]]) -> None:
         """
         Register a callback to be executed when the application quits.
         The callback should take no arguments.
@@ -318,8 +326,33 @@ class PomodoroView:
             self.next_pomodoro()
         self.root.after(1000, self.update_timer)
 
+    def _flash_bg(self, duration_ms: int = 160) -> None:
+        """
+        Briefly overlay a black frame over the window to create a white->black->white flash.
+        The overlay is removed after duration_ms milliseconds.
+        """
+        # if there's already a flash in progress, don't start another
+        if getattr(self, "_flash_overlay", None) is not None:
+            return
+        overlay = tk.Frame(self.root, bg="black")
+        overlay.place(relx=0, rely=0, relwidth=1, relheight=1)
+        overlay.lift()
+        overlay.configure(takefocus=0)
+        self._flash_overlay = overlay
+        self.root.after(duration_ms, self._remove_flash)
+
+    def _remove_flash(self) -> None:
+        overlay = getattr(self, "_flash_overlay", None)
+        if overlay is not None:
+            try:
+                overlay.destroy()
+            finally:
+                self._flash_overlay = None
+
     def next_pomodoro(self) -> None:
         self.model.get_next_state()
+        # flash the window to indicate a state change
+        self._flash_bg()
         self.update_display()
 
     def pause_pomodoro(self) -> None:
@@ -374,6 +407,8 @@ class PomodoroView:
         return grid
 
     def populate_spreadsheet(self) -> None:
+        if not self.spreadsheet:
+            return
         for row_entries in self.spreadsheet:
             for entry in row_entries:
                 entry.delete(0, tk.END)
@@ -428,10 +463,13 @@ class PomodoroView:
                     raise ValueError("CSV format incorrect. Each row must have a task name and a number of pomodoros.")
                 tasks.append([row[0], int(row[1])])
         self.model.task_list = tasks
-        self.populate_spreadsheet()
+        # only populate spreadsheet if it exists (task list window may not be open at startup)
+        if self.spreadsheet:
+            self.populate_spreadsheet()
         self.model.select_task(0) if tasks else self.model.reset_pomodoro()
         self.update_display()
         self.model.start()
+        self.tasks_filename = file_path
 
     def load_from_csv(self) -> None:
         file_path: str = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
@@ -556,6 +594,7 @@ if __name__ == "__main__":
     # Try to load tasks
     if os.path.exists(pomodoro_view.tasks_filename):
         try:
+            # load without requiring the task-window to be open
             pomodoro_view.load_from_existing_csv(pomodoro_view.tasks_filename)
         except Exception as e:
             print(f"Error loading tasks.csv: {e}")
