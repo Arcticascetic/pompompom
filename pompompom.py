@@ -28,6 +28,7 @@ import csv
 import json
 import os
 from typing import List, Tuple, Any, Optional, Callable
+import subprocess
 
 class PomodoroModel:
     """
@@ -349,9 +350,47 @@ class PomodoroView:
             finally:
                 self._flash_overlay = None
 
+    def _play_alert(self) -> None:
+        """
+        Play a short alert sound when the pomodoro state changes.
+        Tries tkinter bell, then platform-specific fallbacks.
+        """
+        # 1) Tk bell (simple, cross-platform)
+        try:
+            self.root.bell()
+        except Exception:
+            pass
+
+        # 2) Windows: winsound.MessageBeep
+        if os.name == "nt":
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+                return
+            except Exception:
+                pass
+
+        # 3) Unix-like: try a few common sound players (non-blocking, silent on failure)
+        for cmd in (
+            ["canberra-gtk-play", "-i", "dialog-warning"],
+            ["paplay", "/usr/share/sounds/freedesktop/stereo/complete.oga"],
+            ["aplay", "/usr/share/sounds/alsa/Front_Center.wav"],
+        ):
+            try:
+                subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return
+            except Exception:
+                continue
+
+        # If nothing else worked, do nothing (bell was already attempted).
+
     def next_pomodoro(self) -> None:
         self.model.get_next_state()
-        # flash the window to indicate a state change
+        # play alert sound and flash the window to indicate a state change
+        try:
+            self._play_alert()
+        except Exception:
+            pass
         self._flash_bg()
         self.update_display()
 
