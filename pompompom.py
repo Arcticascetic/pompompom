@@ -128,6 +128,31 @@ class PomodoroView:
         self.root.resizable(True, True)
         self.root.minsize(120, 80) # Set a minimum practical size
 
+        # try to set application icon (icons/icon.ico relative to this file)
+        try:
+            icon_path = os.path.join(os.path.dirname(__file__), "icons", "icon.ico")
+            if os.path.exists(icon_path):
+                try:
+                    self.root.iconbitmap(icon_path)
+                except Exception:
+                    # try loading as a PhotoImage (some Tk builds support .ico)
+                    try:
+                        icon_img = tk.PhotoImage(file=icon_path)
+                        self.root.iconphoto(True, icon_img)
+                        self._icon_image = icon_img  # keep reference
+                    except Exception:
+                        # fallback: try Pillow to convert icon to a Tk image
+                        try:
+                            from PIL import Image, ImageTk
+                            img = Image.open(icon_path)
+                            icon_img = ImageTk.PhotoImage(img)
+                            self.root.iconphoto(True, icon_img)
+                            self._icon_image = icon_img
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
         self._start_x: int = 0
         self._start_y: int = 0
         self._orig_x: int = 0
