@@ -1,6 +1,6 @@
 # MIT License
 
-# Copyright (c) [year] [fullname]
+# Copyright (c) 2025 Anil Mani
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -426,31 +426,123 @@ class PomodoroView:
     def pause_pomodoro(self) -> None:
         self.model.toggle_pause()
 
-    def select_task_window(self) -> None:
-        if not self.model.task_list:
-            messagebox.showinfo("No Tasks", "Please create or load a task list first.")
-            return
-        select_window: tk.Toplevel = tk.Toplevel(self.root)
-        select_window.title("Select Task")
-        
-        listbox: tk.Listbox = tk.Listbox(select_window, width=50, height=15)
-        listbox.pack(padx=10, pady=10)
-        for i, task in enumerate(self.model.task_list):
-            listbox.insert(tk.END, f"{i+1}. {task[0]} ({task[1]} Pomodoros)")
-            
-        def on_select() -> None:
-            selected_indices = listbox.curselection()
-            if selected_indices:
-                self.model.select_task(selected_indices[0])
-                self.update_display()
-                select_window.destroy()
-        tk.Button(select_window, text="Select", command=on_select).pack(pady=5)
+
 
     def open_task_list(self) -> None:
+        self.task_window = tk.Toplevel(self.root)
+        self.task_window.title("Task List")
+        self.spreadsheet = self.create_spreadsheet(self.task_window, 20, 2)
+        self.populate_spreadsheet()
+        
+        button_frame: tk.Frame = tk.Frame(self.task_window)
+        button_frame.pack(pady=5)
+        
+        tk.Button(button_frame, text="Save to CSV", command=self.save_to_csv).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Load from CSV", command=self.load_from_csv).pack(side=tk.LEFT, padx=5)
+
+    def create_spreadsheet(self, parent: tk.Toplevel, rows: int, cols: int) -> List[List[tk.Entry]]:
+        spreadsheet_frame: tk.Frame = tk.Frame(parent)
+        spreadsheet_frame.pack(padx=10, pady=10)
+        grid: List[List[tk.Entry]] = []
+        headers: List[str] = ["Task Name", "Pomodoros"]
+        for j, header in enumerate(headers):
+            tk.Label(spreadsheet_frame, text=header, font=('Helvetica', 10, 'bold')).grid(row=0, column=j, sticky='nsew')
+        for i in range(1, rows + 1):
+            row: List[tk.Entry] = []
+            for j in range(cols):
+                entry: tk.Entry = tk.Entry(spreadsheet_frame, width=25)
+                entry.grid(row=i, column=j, sticky='nsew')
+                row.append(entry)
+            grid.append(row)
+        return grid
+
+    def populate_spreadsheet(self) -> None:
+        if not self.spreadsheet:
+            return
+        for row_entries in self.spreadsheet:
+            for entry in row_entries:
+                entry.delete(0, tk.END)
+        for i, (task_name, pomodoros) in enumerate(self.model.task_list):
+            if i < len(self.spreadsheet):
+                self.spreadsheet[i][0].insert(0, task_name)
+                self.spreadsheet[i][1].insert(0, pomodoros)
+
+    def save_to_csv(self) -> None:
+
+        tasks: List[List[str | int]] = []
+        for row in self.spreadsheet:
+            if len(row) != 2:
+                raise ValueError("CSV format incorrect. Each row must have a task name and a number of pomodoros.")
+            curr_task : List[List[str | int]] = []
+            isValid : bool = True
+            for entry in row:
+                cellVal : str = entry.get()
+                if len(cellVal) == 0:
+                    isValid = False
+                curr_task.append(cellVal)
+
+            if isValid:
+                tasks.append([curr_task[0], int(curr_task[1])])
+
+        self.model.task_list = tasks
+        if not tasks:
+            messagebox.showwarning("Empty List", "Task list is empty. Nothing to save.")
+            return
+        file_path: str = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv")])
+        if file_path:
+            try:
+                with open(file_path, 'w', newline='') as f:
+                    writer = csv.writer(f)
+                    writer.writerow(["Task Name", "Pomodoros"])
+                    writer.writerows(tasks)
+                self.tasks_filename = file_path
+
+                if self.model.current_task_index >= len(tasks): self.model.select_task(0)
+                self.update_display()
+                self.model.start()
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not save file: {e}")
+
+        
+    def load_from_existing_csv(self, file_path: str) -> None:
+        tasks: List[List[str | int]] = []
+        with open(file_path, 'r', newline='') as f:
+            reader = csv.reader(f)
+            next(reader)
+            for row in reader:
+                if len(row) != 2 or not row[1].isdigit():
+                    raise ValueError("CSV format incorrect. Each row must have a task name and a number of pomodoros.")
+                tasks.append([row[0], int(row[1])])
+        self.model.task_list = tasks
+        # only populate spreadsheet if it exists (task list window may not be open at startup)
+        if self.spreadsheet:
+            self.populate_spreadsheet()
+        # update the listbox view if the task-list window is open
+        if self.task_listbox:
+            self._populate_task_listbox()
+        self.model.select_task(0) if tasks else self.model.reset_pomodoro()
+        self.update_display()
+        self.model.start()
+        self.tasks_filename = file_path
+
+    def load_from_csv(self) -> None:
+        file_path: str = filedialog.askopenfilename(filetypes=[("CSV files", "*.csv")])
+        if file_path:
+            try:
+                self.load_from_existing_csv(file_path)
+            except Exception as e:
+                messagebox.showerror("Error", f"Could not load file: {e}")
+
+    def select_task_window(self) -> None:
         """
         Open a task-list window with a reorderable Listbox. Drag items with
         the mouse to reorder the tasks; changes update model.task_list.
         """
+        if not self.model.task_list:
+            messagebox.showinfo("No Tasks", "Please create or load a task list first.")
+            return
+            
+        
         self.task_window = tk.Toplevel(self.root)
         self.task_window.title("Task List")
 
@@ -473,29 +565,17 @@ class PomodoroView:
 
         button_frame: tk.Frame = tk.Frame(self.task_window)
         button_frame.pack(pady=5)
-        tk.Button(button_frame, text="Save to CSV", command=self._save_tasklist_to_csv).pack(side=tk.LEFT, padx=5)
-        tk.Button(button_frame, text="Load from CSV", command=self.load_from_csv).pack(side=tk.LEFT, padx=5)
 
-    def load_from_existing_csv(self, file_path: str) -> None:
-        tasks: List[List[str | int]] = []
-        with open(file_path, 'r', newline='') as f:
-            reader = csv.reader(f)
-            next(reader)
-            for row in reader:
-                if len(row) != 2 or not row[1].isdigit():
-                    raise ValueError("CSV format incorrect. Each row must have a task name and a number of pomodoros.")
-                tasks.append([row[0], int(row[1])])
-        self.model.task_list = tasks
-        # only populate spreadsheet if it exists (task list window may not be open at startup)
-        if self.spreadsheet:
-            self.populate_spreadsheet()
-        # update the listbox view if the task-list window is open
-        if self.task_listbox:
-            self._populate_task_listbox()
-        self.model.select_task(0) if tasks else self.model.reset_pomodoro()
-        self.update_display()
-        self.model.start()
-        self.tasks_filename = file_path
+        def on_select() -> None:
+            selected_indices = self.task_listbox.curselection()
+            if selected_indices:
+                self.model.select_task(selected_indices[0])
+                self.update_display()
+                self.task_window.destroy()
+                self.model.start()
+        tk.Button(button_frame, text="Save to CSV", command=self._save_tasklist_to_csv).pack(side=tk.LEFT, padx=5)
+        tk.Button(button_frame, text="Select", command=on_select).pack(side=tk.LEFT, padx=5)
+	
 
     def _populate_task_listbox(self) -> None:
         """Fill the task-list Listbox from model.task_list."""
