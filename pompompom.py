@@ -38,7 +38,9 @@ class PomodoroModel:
         self.work_duration: int = 25 * 60
         self.short_break_duration: int = 5 * 60
         self.long_break_duration: int = 15 * 60
-        self.pomodoro_cycle: List[str] = ["Work", "Short Break", "Work", "Short Break", "Work", "Short Break", "Work", "Long Break"]
+		self.numCyclesBeforeLongBreak: int = 4
+        self.pomodoro_cycle: List[str] = ["Work", "Short Break"]*self.numCyclesBeforeLongBreak
+		self.pomodoro_cycle.append("Long Break")
         self.current_state_index: int = 0
         self.is_running: bool = False
         self.remaining_time: int = self.work_duration
