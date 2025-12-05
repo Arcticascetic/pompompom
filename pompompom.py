@@ -665,20 +665,27 @@ class PomodoroView:
         tk.Label(frame, text="Work Duration (min):").grid(row=0, column=0, sticky='w', pady=5)
         tk.Label(frame, text="Short Break (min):").grid(row=1, column=0, sticky='w', pady=5)
         tk.Label(frame, text="Long Break (min):").grid(row=2, column=0, sticky='w', pady=5)
-
+		tk.Label(frame, text="Num Cycles Before Long Break:").grid(row=3, column=0, sticky='w', pady=5)
+		
         work_var: tk.StringVar = tk.StringVar(value=str(self.model.work_duration // 60))
         short_break_var: tk.StringVar = tk.StringVar(value=str(self.model.short_break_duration // 60))
         long_break_var: tk.StringVar = tk.StringVar(value=str(self.model.long_break_duration // 60))
-
+        long_break_var: tk.StringVar = tk.StringVar(value=str(self.model.long_break_duration // 60))
+		num_cycles_before_long_break_var: tk.StringVar = tk.StringVar(value=str(self.model.numCyclesBeforeLongBreak // 60))
+		
         tk.Entry(frame, textvariable=work_var, width=10).grid(row=0, column=1)
         tk.Entry(frame, textvariable=short_break_var, width=10).grid(row=1, column=1)
         tk.Entry(frame, textvariable=long_break_var, width=10).grid(row=2, column=1)
-        
+        tk.Entry(frame, textvariable=num_cycles_before_long_break_var, width=10).grid(row=3, column=1)
+
         def apply_settings(from_load: bool = False) -> None:
             try:
                 self.model.work_duration = int(work_var.get()) * 60
                 self.model.short_break_duration = int(short_break_var.get()) * 60
                 self.model.long_break_duration = int(long_break_var.get()) * 60
+				self.model.numCyclesBeforeLongBreak = int(num_cycles_before_long_break_var.get())
+				self.model.pomodoro_cycle =  ["Work", "Short Break"]*self.numCyclesBeforeLongBreak
+				self.model.pomodoro_cycle.append("Long Break")
                 self.model.reset_pomodoro()
                 self.update_display()
                 if not from_load: settings_window.destroy()
@@ -720,6 +727,7 @@ if __name__ == "__main__":
                 'work': str(pomodoro_model.work_duration // 60),
                 'short': str(pomodoro_model.short_break_duration // 60),
                 'long': str(pomodoro_model.long_break_duration // 60),
+				'numCyclesBeforeLongBreak': str(pomodoro_model.numCyclesBeforeLongBreak),
             }
             with open(pomodoro_view.config_filename, "w") as f:
                 json.dump(config_data, f, indent=4)
@@ -760,6 +768,9 @@ if __name__ == "__main__":
                 pomodoro_model.work_duration = int(data['work']) * 60
                 pomodoro_model.short_break_duration = int(data['short']) * 60
                 pomodoro_model.long_break_duration = int(data['long']) * 60
+				pomodoro_model.numCyclesBeforeLongBreak = int(data['numCyclesBeforeLongBreak'])
+				pomodoro_model.pomodoro_cycle = ["Work", "Short Break"]*self.numCyclesBeforeLongBreak
+				pomodoro_model.pomodoro_cycle.append("Long Break")
                 pomodoro_model.reset_pomodoro()
                 pomodoro_view.update_display()
         except Exception as e:
